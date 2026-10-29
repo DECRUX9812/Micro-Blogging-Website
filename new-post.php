@@ -9,16 +9,7 @@
    
   <?php
         session_start();
-		$servername = "localhost";
-		$username = "rpk158";
-		$password = "ritesh";
-		$dbname = "rpk158";
-		// Create connection
-		$conn = new mysqli($servername, $username, $password, $dbname);
-		// Check connection
-		if ($conn->connect_error) {
-			die("Connection failed: " . $conn->connect_error);
-		}
+		require __DIR__ . "/common.php";
 
 		if (isset($_SESSION["user_id"])) {
 			$get_user_id = $_SESSION["user_id"];
@@ -32,22 +23,26 @@
   		}
 
 
-		if ($_SERVER["REQUEST_METHOD"] == "POST") {	
-			$user_id = $_POST['hideId'];
-			if ($user_id == "zero"){
+		if ($_SERVER["REQUEST_METHOD"] == "POST") {
+			// Author comes from the session, never from a form field.
+			$user_id = $get_user_id;
+			if ($user_id === "zero"){
 				echo "<div class='top_error'>Your login information doesn't exist. Please login on <a href='login.php'>HERE!</a></div>";
 			} else {
 				$post_title = $_POST['post_title'];
 				$post_content = $_POST['post_content'];
 				$post_date = date("Y-m-d") .", ". date("h:i:sa");
-				
-				$sql_insert = "INSERT INTO post_tb (user_id, post_title, post_content, post_date, post_like, post_dislike) VALUES ('$user_id', '$post_title', '$post_content', '$post_date', '0', '0')";
-				if ($conn->query($sql_insert) === TRUE) {
+
+				$ins = $conn->prepare("INSERT INTO post_tb (user_id, post_title, post_content, post_date, post_like, post_dislike) VALUES (?, ?, ?, ?, '0', '0')");
+				$ins->bind_param("isss", $user_id, $post_title, $post_content, $post_date);
+				if ($ins->execute()) {
 					header("Location: http://www2.cs.uregina.ca/~rpk158/CS215/post-list.php");
+					exit;
 				} else {
 					header("Location: http://www2.cs.uregina.ca/~rpk158/CS215/new-post.php");
+					exit;
 				}
-			}	
+			}
 		}
 	?>
   <nav class="menu">
@@ -66,7 +61,7 @@
     </div>
     <div class="body">
       <form method="post" id="post-form" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>" onsubmit="return validateform()" enctype="multipart/form-data">
-	  	<input type="hidden" id="hideId" name="hideId" value="<?php echo $get_user_id; ?>">
+	  	<input type="hidden" id="hideId" name="hideId" value="<?php echo e($get_user_id); ?>">
         <div class="form-group">
           <label for="username">Title</label>
           <input type="text" id="post_title" name= "post_title" class="form-control" placeholder="title"/>

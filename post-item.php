@@ -9,16 +9,7 @@
 
   <?php
     session_start();
-		$servername = "localhost";
-		$username = "rpk158";
-		$password = "ritesh";
-		$dbname = "rpk158";
-		// Create connection
-		$conn = new mysqli($servername, $username, $password, $dbname);
-		// Check connection
-		if ($conn->connect_error) {
-			die("Connection failed: " . $conn->connect_error);
-		}
+		require __DIR__ . "/common.php";
 
     if (isset($_SESSION["user_id"])) {
       $get_user_id = $_SESSION["user_id"];
@@ -28,10 +19,12 @@
 
     
 		if (isset($_GET['post_id'])) {
-			$post_id = $_GET['post_id'];
-      $sql = "SELECT p.*, s.user_imgurl, s.username, s.user_birthday FROM post_tb p INNER JOIN signup_tb s ON p.user_id=s.user_id WHERE post_id = '$post_id'";
-      $result = $conn->query($sql);
-      $row = mysqli_fetch_array($result,MYSQLI_ASSOC);
+			$post_id = (int)$_GET['post_id'];
+      $stmt = $conn->prepare("SELECT p.*, s.user_imgurl, s.username, s.user_birthday FROM post_tb p INNER JOIN signup_tb s ON p.user_id=s.user_id WHERE post_id = ?");
+      $stmt->bind_param("i", $post_id);
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $row = $result->fetch_assoc();
 		}
 
 	?>
@@ -47,18 +40,18 @@
 	</nav>
   <body>
     <div class="header">
-      <h1 class="title"><?php echo ($row['post_title']); ?></h1>
+      <h1 class="title"><?php echo e($row['post_title'] ?? ''); ?></h1>
     </div>
     <div class="body">
       <?php
         if ($result->num_rows > 0) {
-          echo "<div class='user-detail'><div class='left'><div class='username'>".$row['username']."</div><div class='birthday'>".$row['user_birthday']."</div></div>";
-          echo "<div class='avatar'><img src='http://www2.cs.uregina.ca/~rpk158/CS215/".$row['user_imgurl']."' alt='avatar' /></div></div>";
-          echo "<div class='post-list'><div class='card'><div class='card-header'><div class='card-title'>".$row['post_title']."</div>";
+          echo "<div class='user-detail'><div class='left'><div class='username'>".e($row['username'])."</div><div class='birthday'>".e($row['user_birthday'])."</div></div>";
+          echo "<div class='avatar'><img src='http://www2.cs.uregina.ca/~rpk158/CS215/".e($row['user_imgurl'])."' alt='avatar' /></div></div>";
+          echo "<div class='post-list'><div class='card'><div class='card-header'><div class='card-title'>".e($row['post_title'])."</div>";
           echo "<div class='card-actions'><span style='margin-right: 5px;'><img id='like_fix' src='http://www2.cs.uregina.ca/~rpk158/CS215/like.png' width='18' onclick='like()' />".$row['post_like']."</span>";
           echo "<span style='margin-left: 5px'><img id='dislike_fix' src='http://www2.cs.uregina.ca/~rpk158/CS215/dislike.png'  width='18' onclick='dislike()' />".$row['post_dislike']."</span></div></div>";
-          echo "<div class='card-body'><p style='text-align: left'>".$row['post_content']."</p></div>";
-          echo "<div class='card-footer'><div class='card-right'>".$row['post_date']."</div></div></div></div>";  
+          echo "<div class='card-body'><p style='text-align: left'>".e($row['post_content'])."</p></div>";
+          echo "<div class='card-footer'><div class='card-right'>".e($row['post_date'])."</div></div></div></div>";  
         } else {
           echo "<h2>There is no content that has been posted.</h2>";
         }

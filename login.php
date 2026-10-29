@@ -9,29 +9,43 @@
 
 	<?php
 	    session_start();
-		$servername = "localhost";
-		$username = "rpk158";
-		$password = "ritesh";
-		$dbname = "rpk158";
-		// Create connection
-		$conn = new mysqli($servername, $username, $password, $dbname);
-		// Check connection
-		if ($conn->connect_error) {
-			die("Connection failed: " . $conn->connect_error);
-		}
+		require __DIR__ . "/common.php";
 
 		if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$username = $_POST['username'];
 			$password = $_POST['password'];
-	
-			$sql = "SELECT * FROM signup_tb WHERE username = '$username' AND user_password = '$password'";
-			$result = $conn->query($sql);
-			if ($result->num_rows > 0) {
-				$row = mysqli_fetch_array($result,MYSQLI_ASSOC);
 
+			$stmt = $conn->prepare("SELECT user_id, user_password FROM signup_tb WHERE username = ?");
+			$stmt->bind_param("s", $username);
+			$stmt->execute();
+			$row = $stmt->get_result()->fetch_assoc();
+			$stmt->close();
+
+			$ok = false;
+			$needs_rehash = false;
+			if ($row) {
+				$stored = $row['user_password'];
+				if (password_verify($password, $stored)) {
+					$ok = true;
+					$needs_rehash = password_needs_rehash($stored, PASSWORD_DEFAULT);
+				} elseif (hash_equals($stored, $password)) {
+					// Legacy plaintext row — verified, then upgraded to a hash below.
+					$ok = true;
+					$needs_rehash = true;
+				}
+				if ($ok && $needs_rehash) {
+					$newhash = password_hash($password, PASSWORD_DEFAULT);
+					$upd = $conn->prepare("UPDATE signup_tb SET user_password = ? WHERE user_id = ?");
+					$upd->bind_param("si", $newhash, $row['user_id']);
+					$upd->execute();
+					$upd->close();
+				}
+			}
+
+			if ($ok) {
 				$_SESSION["user_id"] = $row['user_id'];
-
 				header("Location: http://www2.cs.uregina.ca/~rpk158/CS215/user-detail.php");
+				exit;
 			} else {
 				echo "<div class='top_error'>Your information doesn't exist. Please sign up on <a href='signup.php'>HERE!</a></div>";
 			}

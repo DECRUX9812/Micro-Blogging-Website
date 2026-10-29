@@ -8,16 +8,7 @@
 	</head>
     
 	<?php
-		$servername = "localhost";
-		$username = "rpk158";
-		$password = "ritesh";
-		$dbname = "rpk158";
-		// Create connection
-		$conn = new mysqli($servername, $username, $password, $dbname);
-		// Check connection
-		if ($conn->connect_error) {
-			die("Connection failed: " . $conn->connect_error);
-		}
+		require __DIR__ . "/common.php";
 
 		if ($_SERVER["REQUEST_METHOD"] == "POST") {
 			$email = $_POST['email'];
@@ -25,25 +16,53 @@
 			$password = $_POST['password'];
 			$birthday = $_POST['birthday'];
 
-			$target_dir = "/home/hercules/r/rpk158/public_html/CS215/uploads/";
-			$target_file = "uploads/";
-			$path = $target_dir.basename($_FILES["avatar"]["name"]);
-			$path_file = $target_file.basename($_FILES["avatar"]["name"]);
-            
-			$sql = "SELECT * FROM signup_tb WHERE user_email = '$email'";
-			$result = $conn->query($sql);
-			if ($result->num_rows > 0) {
+			$valid = filter_var($email, FILTER_VALIDATE_EMAIL)
+				&& preg_match('/^\w{1,50}$/', $username)
+				&& strlen($password) >= 6
+				&& preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthday);
+
+			$stmt = $conn->prepare("SELECT user_id FROM signup_tb WHERE user_email = ?");
+			$stmt->bind_param("s", $email);
+			$stmt->execute();
+			$exists = $stmt->get_result()->num_rows > 0;
+			$stmt->close();
+
+			if (!$valid) {
+				echo "<div class='top_error'>Please check your input and try again.</div>";
+			} elseif ($exists) {
 				echo "<div class='top_error'>Your email already exists. Please login on <a href='login.php'>HERE!</a></div>";
 			} else {
-				if(move_uploaded_file($_FILES["avatar"]["tmp_name"], $path)) {
-					$sql_insert = "INSERT INTO signup_tb (user_imgurl, user_email, username, user_password, user_birthday) VALUES ('$path_file', '$email', '$username', '$password', '$birthday')";
-					if ($conn->query($sql_insert) === TRUE) {
-						header("Location: login.php");
-					} else {
-						header("Location: signup.php");
-					}
+				$target_dir = "/home/hercules/r/rpk158/public_html/CS215/uploads/";
+				$target_file = "uploads/";
+				// Avatar: images only, <= 2MB, server-generated filename —
+				// blocks uploading a .php (or other script) into a web dir.
+				$allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg",
+				            "png" => "image/png", "gif" => "image/gif",
+				            "webp" => "image/webp"];
+				$f = $_FILES["avatar"] ?? null;
+				$ext = $f ? strtolower(pathinfo($f["name"], PATHINFO_EXTENSION)) : "";
+				$mime = ($f && is_uploaded_file($f["tmp_name"]))
+					? (new finfo(FILEINFO_MIME_TYPE))->file($f["tmp_name"]) : "";
+				if (!$f || $f["error"] !== UPLOAD_ERR_OK || $f["size"] > 2 * 1024 * 1024
+						|| !isset($allowed[$ext]) || $mime !== $allowed[$ext]) {
+					echo "<div class='top_error'>Avatar must be a JPG, PNG, GIF or WebP image under 2MB.</div>";
 				} else {
-					echo $_FILES["avatar"]["error"];
+					$filename = uniqid("av_", true) . "." . $ext;
+					$path = $target_dir . $filename;
+					$path_file = $target_file . $filename;
+					if (move_uploaded_file($f["tmp_name"], $path)) {
+						$hash = password_hash($password, PASSWORD_DEFAULT);
+						$ins = $conn->prepare("INSERT INTO signup_tb (user_imgurl, user_email, username, user_password, user_birthday) VALUES (?, ?, ?, ?, ?)");
+						$ins->bind_param("sssss", $path_file, $email, $username, $hash, $birthday);
+						if ($ins->execute()) {
+							header("Location: login.php");
+							exit;
+						}
+						header("Location: signup.php");
+						exit;
+					} else {
+						echo e($f["error"]);
+					}
 				}
 			}
 		}
